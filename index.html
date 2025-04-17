@@ -149,18 +149,20 @@
   pageWrapper.innerHTML = '';
   const isPortrait = window.innerWidth < 700;
   const pages = isPortrait ? [startPage] : [startPage, startPage + 1];
-  
-  const containerWidth = viewerContainer.clientWidth;
-  const targetWidth = isPortrait ? containerWidth : containerWidth / 2 - 20;
-
   const canvases = await Promise.all(pages.map(async p => {
     if (p > totalPages) return null;
+
     const canvas = document.createElement('canvas');
     const page = await pdfDoc.getPage(p);
     const viewport = page.getViewport({ scale: 1 });
-    const scale = targetWidth / viewport.width;
-    const scaledViewport = page.getViewport({ scale });
 
+    // Determine max width based on viewer container
+    const maxWidth = isPortrait
+      ? viewerContainer.clientWidth - 40
+      : (viewerContainer.clientWidth / 2) - 40;
+    const scale = maxWidth / viewport.width;
+
+    const scaledViewport = page.getViewport({ scale });
     canvas.width = scaledViewport.width;
     canvas.height = scaledViewport.height;
 
@@ -168,12 +170,12 @@
     return canvas;
   }));
 
-  canvases.filter(c => c).forEach(canvas => pageWrapper.appendChild(canvas));
+  canvases.filter(Boolean).forEach(canvas => pageWrapper.appendChild(canvas));
   const endPage = pages[pages.length - 1] > totalPages ? totalPages : pages[pages.length - 1];
   pageNumSpan.textContent = `Page ${startPage}${endPage > startPage ? '-' + endPage : ''}`;
 }
 
-
+    
     window.addEventListener('resize', () => renderPages(currentPage));
     goBtn.onclick = () => {
       const val = parseInt(pageInput.value);
