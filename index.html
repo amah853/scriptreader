@@ -50,7 +50,7 @@
     }
 
     canvas {
-      max-width: 48%;
+      max-width: 100%;
       height: auto;
     }
 
@@ -124,6 +124,26 @@
 
     .page-input {
       width: 50px;
+    }
+
+    @media (max-width: 600px) {
+      #viewer-container {
+        flex-direction: column;
+        justify-content: flex-start;
+      }
+      canvas {
+        max-width: 100%;
+      }
+    }
+
+    @media (min-width: 600px) {
+      #viewer-container {
+        justify-content: space-evenly;
+      }
+    }
+
+    #page-num {
+      white-space: nowrap;
     }
   </style>
 </head>
