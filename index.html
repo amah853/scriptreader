@@ -20,7 +20,7 @@
       background: #2c3e50;
       color: white;
       display: flex;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       gap: 10px;
       align-items: center;
       justify-content: space-between;
@@ -54,7 +54,13 @@
       cursor: pointer;
     }
 
-    #controls, #page-controls {
+    #controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    #page-controls {
       display: flex;
       gap: 10px;
       align-items: center;
@@ -101,14 +107,12 @@
 </head>
 <body>
   <div id="top-bar">
-    <!-- Left Side: Add Note, Add Bookmark, Save -->
+    <input type="file" id="file-input" accept=".pdf" />
     <div id="controls">
       <button id="add-note-btn" disabled>Add Note</button>
       <button id="add-bookmark-btn" disabled>Add Bookmark</button>
       <button id="save-btn" disabled>Save</button>
     </div>
-    
-    <!-- Right Side: Page controls, Number box & Go, Prev, Next -->
     <div id="page-controls">
       <input type="number" id="page-input" min="1" style="width: 50px;" />
       <button id="go-page">Go</button>
@@ -117,7 +121,7 @@
       <span id="page-num">Page 1-2</span>
     </div>
   </div>
-  
+
   <button id="bookmark-toggle">Toggle Bookmarks</button>
   <div id="viewer-container"></div>
   <div id="bookmark-list"></div>
