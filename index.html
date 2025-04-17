@@ -3,16 +3,308 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Script Annotator</title>
-  <link rel="stylesheet" href="style.css" />
+  <title>Script Note Viewer</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      background: #f5f5f5;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    #top-bar {
+      width: 100%;
+      padding: 10px;
+      background: #2c3e50;
+      color: white;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 10;
+    }
+
+    #viewer-container {
+      flex: 1;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: center;
+      background: #f0f0f0;
+      overflow: hidden;
+      position: relative;
+      flex-wrap: wrap;
+    }
+
+    canvas {
+      max-width: 48%;
+      height: auto;
+    }
+
+    .note {
+      position: absolute;
+      background: yellow;
+      padding: 4px;
+      font-size: 12px;
+      border-radius: 5px;
+      max-width: 150px;
+      cursor: pointer;
+    }
+
+    #controls, #page-controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    button {
+      padding: 6px 12px;
+      font-size: 14px;
+      cursor: pointer;
+      background: #3498db;
+      color: white;
+      border: none;
+      border-radius: 4px;
+    }
+
+    button:disabled {
+      background: #95a5a6;
+    }
+
+    #bookmark-list {
+      position: absolute;
+      right: 10px;
+      top: 60px;
+      background: white;
+      border: 1px solid #ccc;
+      padding: 10px;
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 20;
+      display: none;
+    }
+
+    #bookmark-toggle {
+      position: absolute;
+      right: 10px;
+      top: 30px;
+      background: #2c3e50;
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      cursor: pointer;
+      z-index: 30;
+    }
+  </style>
 </head>
 <body>
-  <input type="file" id="file-input" accept=".pdf" />
-  <div id="viewer"></div>
-  <button id="save-btn" hidden>Save Annotated PDF</button>
+  <div id="top-bar">
+    <input type="file" id="file-input" accept=".pdf" />
+    <div id="controls">
+      <button id="add-note-btn" disabled>Add Note</button>
+      <button id="add-bookmark-btn" disabled>Add Bookmark</button>
+      <button id="save-btn" disabled>Save</button>
+    </div>
+    <div id="page-controls">
+      <button id="prev-page">Prev</button>
+      <input type="number" id="page-input" min="1" style="width: 50px;" />
+      <button id="go-page">Go</button>
+      <span id="page-num">Page 1-2</span>
+      <input type="text" id="search-text" placeholder="Search..." />
+      <button id="search-btn">Search</button>
+    </div>
+  </div>
+  <button id="bookmark-toggle">Toggle Bookmarks</button>
+  <div id="viewer-container"></div>
+  <div id="bookmark-list"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
-  <script src="pdf-lib.min.js"></script>
-  <script src="script.js"></script>
+  <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = null;
+
+    const fileInput = document.getElementById('file-input');
+    const addNoteBtn = document.getElementById('add-note-btn');
+    const addBookmarkBtn = document.getElementById('add-bookmark-btn');
+    const saveBtn = document.getElementById('save-btn');
+    const prevPageBtn = document.getElementById('prev-page');
+    const pageNumSpan = document.getElementById('page-num');
+    const pageInput = document.getElementById('page-input');
+    const goPageBtn = document.getElementById('go-page');
+    const searchBtn = document.getElementById('search-btn');
+    const searchText = document.getElementById('search-text');
+    const viewer = document.getElementById('viewer-container');
+    const bookmarkList = document.getElementById('bookmark-list');
+    const bookmarkToggle = document.getElementById('bookmark-toggle');
+
+    let pdfDoc = null, currentPage = 1, totalPages = 0, pdfBytesOriginal = null;
+    let annotations = [], bookmarks = [], addNoteMode = false;
+
+    fileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      fileInput.style.display = 'none';
+
+      const buffer = await file.arrayBuffer();
+      pdfBytesOriginal = buffer;
+      const loadingTask = pdfjsLib.getDocument({ data: buffer });
+      pdfDoc = await loadingTask.promise;
+      totalPages = pdfDoc.numPages;
+      currentPage = 1;
+      annotations = [];
+
+      renderPages(currentPage);
+      addNoteBtn.disabled = false;
+      saveBtn.disabled = false;
+      addBookmarkBtn.disabled = false;
+    });
+
+    async function renderPages(startPage) {
+      viewer.innerHTML = '';
+      const pagesToRender = [startPage];
+      if (startPage + 1 <= totalPages) pagesToRender.push(startPage + 1);
+
+      for (const pageNum of pagesToRender) {
+        const canvas = document.createElement('canvas');
+        canvas.dataset.page = pageNum;
+        canvas.style.position = 'relative';
+        canvas.addEventListener('click', (e) => {
+          if (!addNoteMode) return;
+          const rect = canvas.getBoundingClientRect();
+          const x = e.clientX - rect.left;
+          const y = e.clientY - rect.top;
+          const text = prompt('Enter note:');
+          if (!text) return;
+          annotations.push({ page: pageNum, x, y, text });
+          drawNotes();
+        });
+
+        const page = await pdfDoc.getPage(pageNum);
+        const viewport = page.getViewport({ scale: 1.5 });
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        viewer.appendChild(canvas);
+      }
+
+      drawNotes();
+      pageNumSpan.textContent = `Page ${currentPage}-${Math.min(currentPage + 1, totalPages)}`;
+    }
+
+    function drawNotes() {
+      document.querySelectorAll('.note').forEach(n => n.remove());
+      const canvases = document.querySelectorAll('canvas');
+
+      annotations.filter(note => note.page === currentPage || note.page === currentPage + 1).forEach(note => {
+        const canvas = [...canvases].find(c => parseInt(c.dataset.page) === note.page);
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const div = document.createElement('div');
+        div.className = 'note';
+        div.style.left = rect.left + note.x + 'px';
+        div.style.top = rect.top + note.y + 'px';
+        div.innerText = note.text;
+        div.onclick = (e) => {
+          e.stopPropagation();
+          const newText = prompt('Edit or delete this note. Leave blank to delete:', note.text);
+          if (newText === null) return;
+          if (newText === '') {
+            annotations = annotations.filter(n => n !== note);
+          } else {
+            note.text = newText;
+          }
+          drawNotes();
+        };
+        document.body.appendChild(div);
+      });
+    }
+
+    addNoteBtn.addEventListener('click', () => {
+      addNoteMode = !addNoteMode;
+      addNoteBtn.style.backgroundColor = addNoteMode ? '#2980b9' : '#3498db';
+    });
+
+    saveBtn.addEventListener('click', async () => {
+      const pdfDocLib = await PDFLib.PDFDocument.load(pdfBytesOriginal);
+      const pages = pdfDocLib.getPages();
+
+      annotations.forEach(note => {
+        const page = pages[note.page - 1];
+        const { height } = page.getSize();
+        page.drawText(note.text, {
+          x: note.x,
+          y: height - note.y,
+          size: 10,
+          color: PDFLib.rgb(0, 0, 0),
+          maxWidth: 150
+        });
+      });
+
+      const pdfBytes = await pdfDocLib.save();
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'annotated_script.pdf';
+      link.click();
+    });
+
+    document.getElementById('next-page')?.addEventListener('click', () => {
+      if (currentPage + 2 <= totalPages) {
+        currentPage += 2;
+        renderPages(currentPage);
+      }
+    });
+
+    prevPageBtn.addEventListener('click', () => {
+      if (currentPage - 2 >= 1) {
+        currentPage -= 2;
+        renderPages(currentPage);
+      }
+    });
+
+    goPageBtn.addEventListener('click', () => {
+      const val = parseInt(pageInput.value);
+      if (val >= 1 && val <= totalPages) {
+        currentPage = val % 2 === 0 ? val - 1 : val;
+        renderPages(currentPage);
+      }
+    });
+
+    addBookmarkBtn.addEventListener('click', () => {
+      if (!bookmarks.includes(currentPage)) {
+        bookmarks.push(currentPage);
+        const btn = document.createElement('button');
+        btn.innerText = 'Page ' + currentPage;
+        btn.onclick = () => {
+          currentPage = parseInt(btn.innerText.split(' ')[1]);
+          renderPages(currentPage);
+        };
+        bookmarkList.appendChild(btn);
+      }
+    });
+
+    bookmarkToggle.addEventListener('click', () => {
+      bookmarkList.style.display = bookmarkList.style.display === 'none' ? 'block' : 'none';
+    });
+
+    searchBtn.addEventListener('click', async () => {
+      const searchTerm = searchText.value.toLowerCase();
+      for (let i = 1; i <= totalPages; i++) {
+        const page = await pdfDoc.getPage(i);
+        const content = await page.getTextContent();
+        const strings = content.items.map(item => item.str).join(' ').toLowerCase();
+        if (strings.includes(searchTerm)) {
+          currentPage = i % 2 === 0 ? i - 1 : i;
+          renderPages(currentPage);
+          return;
+        }
+      }
+      alert('Text not found in document.');
+    });
+  </script>
 </body>
 </html>
