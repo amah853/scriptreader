@@ -84,7 +84,6 @@
       max-height: 200px;
       overflow-y: auto;
       z-index: 20;
-      display: none;
     }
 
     #bookmark-toggle {
@@ -102,21 +101,23 @@
 </head>
 <body>
   <div id="top-bar">
-    <input type="file" id="file-input" accept=".pdf" />
+    <!-- Left Side: Add Note, Add Bookmark, Save -->
     <div id="controls">
       <button id="add-note-btn" disabled>Add Note</button>
       <button id="add-bookmark-btn" disabled>Add Bookmark</button>
       <button id="save-btn" disabled>Save</button>
     </div>
+    
+    <!-- Right Side: Page controls, Number box & Go, Prev, Next -->
     <div id="page-controls">
-      <button id="prev-page">Prev</button>
       <input type="number" id="page-input" min="1" style="width: 50px;" />
       <button id="go-page">Go</button>
+      <button id="prev-page">Prev</button>
+      <button id="next-page">Next</button>
       <span id="page-num">Page 1-2</span>
-      <input type="text" id="search-text" placeholder="Search..." />
-      <button id="search-btn">Search</button>
     </div>
   </div>
+  
   <button id="bookmark-toggle">Toggle Bookmarks</button>
   <div id="viewer-container"></div>
   <div id="bookmark-list"></div>
@@ -124,18 +125,15 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
   <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
   <script>
-    pdfjsLib.GlobalWorkerOptions.workerSrc = null;
-
     const fileInput = document.getElementById('file-input');
     const addNoteBtn = document.getElementById('add-note-btn');
     const addBookmarkBtn = document.getElementById('add-bookmark-btn');
     const saveBtn = document.getElementById('save-btn');
     const prevPageBtn = document.getElementById('prev-page');
+    const nextPageBtn = document.getElementById('next-page');
     const pageNumSpan = document.getElementById('page-num');
     const pageInput = document.getElementById('page-input');
     const goPageBtn = document.getElementById('go-page');
-    const searchBtn = document.getElementById('search-btn');
-    const searchText = document.getElementById('search-text');
     const viewer = document.getElementById('viewer-container');
     const bookmarkList = document.getElementById('bookmark-list');
     const bookmarkToggle = document.getElementById('bookmark-toggle');
@@ -252,7 +250,7 @@
       link.click();
     });
 
-    document.getElementById('next-page')?.addEventListener('click', () => {
+    nextPageBtn.addEventListener('click', () => {
       if (currentPage + 2 <= totalPages) {
         currentPage += 2;
         renderPages(currentPage);
@@ -280,7 +278,7 @@
         const btn = document.createElement('button');
         btn.innerText = 'Page ' + currentPage;
         btn.onclick = () => {
-          currentPage = parseInt(btn.innerText.split(' ')[1]);
+          currentPage = btn.innerText.split(' ')[1] * 1;
           renderPages(currentPage);
         };
         bookmarkList.appendChild(btn);
@@ -289,21 +287,6 @@
 
     bookmarkToggle.addEventListener('click', () => {
       bookmarkList.style.display = bookmarkList.style.display === 'none' ? 'block' : 'none';
-    });
-
-    searchBtn.addEventListener('click', async () => {
-      const searchTerm = searchText.value.toLowerCase();
-      for (let i = 1; i <= totalPages; i++) {
-        const page = await pdfDoc.getPage(i);
-        const content = await page.getTextContent();
-        const strings = content.items.map(item => item.str).join(' ').toLowerCase();
-        if (strings.includes(searchTerm)) {
-          currentPage = i % 2 === 0 ? i - 1 : i;
-          renderPages(currentPage);
-          return;
-        }
-      }
-      alert('Text not found in document.');
     });
   </script>
 </body>
