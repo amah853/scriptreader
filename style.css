@@ -1,0 +1,41 @@
+body {
+  margin: 0;
+  font-family: sans-serif;
+  background: #f4f4f4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+#file-input {
+  margin: 20px;
+}
+
+#viewer {
+  width: 100%;
+  overflow-y: scroll;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+canvas {
+  margin: 10px 0;
+}
+
+.note {
+  position: absolute;
+  background: yellow;
+  border: 1px solid #333;
+  padding: 4px;
+  font-size: 12px;
+  max-width: 150px;
+  z-index: 10;
+  border-radius: 5px;
+}
+
+#save-btn {
+  margin: 20px;
+  padding: 10px 20px;
+  font-size: 16px;
+}
