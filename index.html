@@ -5,16 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Script Note Viewer</title>
   <style>
-    body {
+    * { box-sizing: border-box; }
+    html, body {
       margin: 0;
+      padding: 0;
+      height: 100%;
       font-family: sans-serif;
       background: #f5f5f5;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
       overflow: hidden;
     }
-
     #top-bar {
       width: 100%;
       padding: 10px;
@@ -23,21 +22,14 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      z-index: 10;
+      flex-wrap: wrap;
     }
-
-    #controls {
+    #controls, #page-controls {
       display: flex;
       gap: 10px;
       align-items: center;
+      flex-wrap: wrap;
     }
-
-    #page-controls {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-    }
-
     button {
       padding: 6px 12px;
       font-size: 14px;
@@ -47,92 +39,49 @@
       border: none;
       border-radius: 4px;
     }
-
-    button:disabled {
-      background: #95a5a6;
+    input[type="number"] {
+      padding: 4px;
+      width: 60px;
     }
-
     #viewer-container {
-      flex: 1;
       display: flex;
       justify-content: center;
-      align-items: flex-start;
-      background: #f0f0f0;
+      align-items: center;
+      height: calc(100% - 60px);
       overflow: hidden;
-      position: relative;
-      gap: 10px;
-      padding: 10px;
-      flex-wrap: nowrap;
-      flex-direction: row; /* To show pages next to each other */
     }
-
+    .page-wrapper {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 20px;
+      width: 100%;
+      height: 100%;
+    }
     canvas {
-      max-width: 100%;
-      height: auto;
+      background: white;
+      border: 1px solid #ccc;
     }
-
-    .note {
-      position: absolute;
-      background: yellow;
-      padding: 4px;
-      font-size: 12px;
-      border-radius: 5px;
-      max-width: 150px;
-      cursor: pointer;
-    }
-
     #bookmark-list {
       position: absolute;
-      right: 10px;
       top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
       background: white;
       border: 1px solid #ccc;
       padding: 10px;
+      display: none;
+      z-index: 10;
       max-height: 200px;
       overflow-y: auto;
-      z-index: 20;
     }
-
-    #bookmark-toggle {
-      position: absolute;
-      right: 10px;
-      top: 30px;
-      background: #2c3e50;
-      color: white;
-      border: none;
-      padding: 5px 10px;
-      cursor: pointer;
-      z-index: 30;
-    }
-
     #page-num {
       font-size: 14px;
-      color: #2c3e50;
-      white-space: nowrap; /* Ensure no overflow of the page number text */
-      overflow: hidden;
-      text-overflow: ellipsis;
+      color: #fff;
+      white-space: nowrap;
     }
-
-    /* Landscape view: display two pages */
-    @media (min-width: 800px) {
-      #viewer-container {
-        flex-direction: row; /* Show two pages side by side */
-      }
-
-      canvas {
-        max-width: 50%;
-      }
-    }
-
-    /* Portrait view: display one page */
-    @media (max-width: 799px) {
-      #viewer-container {
-        flex-direction: column; /* Stack pages vertically in portrait */
-      }
-
-      canvas {
-        max-width: 100%;
-      }
+    @media (max-width: 700px) {
+      .page-wrapper { flex-direction: column; }
     }
   </style>
 </head>
@@ -144,183 +93,107 @@
       <button id="add-bookmark-btn" disabled>Add Bookmark</button>
       <button id="save-btn" disabled>Save</button>
     </div>
+    <button id="bookmark-toggle">View Bookmarks</button>
     <div id="page-controls">
-      <button id="prev-page">Prev</button>
-      <input type="number" id="page-input" min="1" style="width: 50px;" />
+      <input type="number" id="page-input" min="1" />
       <button id="go-page">Go</button>
+      <button id="prev-page">Prev</button>
+      <button id="next-page">Next</button>
       <span id="page-num">Page 1-2</span>
     </div>
   </div>
-  <div id="viewer-container"></div>
+  <div id="viewer-container">
+    <div class="page-wrapper" id="page-wrapper"></div>
+  </div>
   <div id="bookmark-list"></div>
-  <button id="bookmark-toggle">Toggle Bookmarks</button>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
-  <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
   <script>
+    let pdfDoc = null, currentPage = 1, totalPages = 0;
     const fileInput = document.getElementById('file-input');
-    const addNoteBtn = document.getElementById('add-note-btn');
-    const addBookmarkBtn = document.getElementById('add-bookmark-btn');
-    const saveBtn = document.getElementById('save-btn');
-    const prevPageBtn = document.getElementById('prev-page');
-    const nextPageBtn = document.getElementById('next-page');
+    const viewerContainer = document.getElementById('viewer-container');
+    const pageWrapper = document.getElementById('page-wrapper');
     const pageNumSpan = document.getElementById('page-num');
+    const addNoteBtn = document.getElementById('add-note-btn');
+    const saveBtn = document.getElementById('save-btn');
+    const goBtn = document.getElementById('go-page');
+    const prevBtn = document.getElementById('prev-page');
+    const nextBtn = document.getElementById('next-page');
     const pageInput = document.getElementById('page-input');
-    const goPageBtn = document.getElementById('go-page');
-    const viewer = document.getElementById('viewer-container');
     const bookmarkList = document.getElementById('bookmark-list');
     const bookmarkToggle = document.getElementById('bookmark-toggle');
+    const bookmarkBtn = document.getElementById('add-bookmark-btn');
 
-    let pdfDoc = null, currentPage = 1, totalPages = 0, pdfBytesOriginal = null;
-    let annotations = [], bookmarks = [], addNoteMode = false;
-
-    fileInput.addEventListener('change', async (e) => {
+    fileInput.addEventListener('change', e => {
       const file = e.target.files[0];
       if (!file) return;
-
       fileInput.style.display = 'none';
-
-      const buffer = await file.arrayBuffer();
-      pdfBytesOriginal = buffer;
-      const loadingTask = pdfjsLib.getDocument({ data: buffer });
-      pdfDoc = await loadingTask.promise;
-      totalPages = pdfDoc.numPages;
-      currentPage = 1;
-      annotations = [];
-
-      renderPages(currentPage);
-      addNoteBtn.disabled = false;
-      saveBtn.disabled = false;
-      addBookmarkBtn.disabled = false;
+      const fileReader = new FileReader();
+      fileReader.onload = function() {
+        const typedarray = new Uint8Array(this.result);
+        pdfjsLib.GlobalWorkerOptions.workerSrc = null;
+        pdfjsLib.getDocument(typedarray).promise.then(pdf => {
+          pdfDoc = pdf;
+          totalPages = pdf.numPages;
+          currentPage = 1;
+          addNoteBtn.disabled = false;
+          saveBtn.disabled = false;
+          bookmarkBtn.disabled = false;
+          renderPages(currentPage);
+        });
+      };
+      fileReader.readAsArrayBuffer(file);
     });
 
     async function renderPages(startPage) {
-      viewer.innerHTML = '';
-      const pagesToRender = [startPage];
-      if (startPage + 1 <= totalPages) pagesToRender.push(startPage + 1);
-
-      for (const pageNum of pagesToRender) {
+      pageWrapper.innerHTML = '';
+      const isPortrait = window.innerWidth < 700;
+      const pages = isPortrait ? [startPage] : [startPage, startPage + 1];
+      const canvases = await Promise.all(pages.map(async p => {
+        if (p > totalPages) return null;
         const canvas = document.createElement('canvas');
-        canvas.dataset.page = pageNum;
-        canvas.style.position = 'relative';
-        canvas.addEventListener('click', (e) => {
-          if (!addNoteMode) return;
-          const rect = canvas.getBoundingClientRect();
-          const x = e.clientX - rect.left;
-          const y = e.clientY - rect.top;
-          const text = prompt('Enter note:');
-          if (!text) return;
-          annotations.push({ page: pageNum, x, y, text });
-          drawNotes();
-        });
-
-        const page = await pdfDoc.getPage(pageNum);
-        const viewport = page.getViewport({ scale: 1.5 });
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-        viewer.appendChild(canvas);
-      }
-
-      drawNotes();
-      pageNumSpan.textContent = `Page ${currentPage}-${Math.min(currentPage + 1, totalPages)}`;
+        const page = await pdfDoc.getPage(p);
+        const vp = page.getViewport({ scale: 1.3 });
+        canvas.width = vp.width;
+        canvas.height = vp.height;
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+        return canvas;
+      }));
+      canvases.filter(c => c).forEach(canvas => pageWrapper.appendChild(canvas));
+      const endPage = pages[pages.length - 1] > totalPages ? totalPages : pages[pages.length - 1];
+      pageNumSpan.textContent = `Page ${startPage}${endPage > startPage ? '-' + endPage : ''}`;
     }
 
-    function drawNotes() {
-      document.querySelectorAll('.note').forEach(n => n.remove());
-      const canvases = document.querySelectorAll('canvas');
-
-      annotations.filter(note => note.page === currentPage || note.page === currentPage + 1).forEach(note => {
-        const canvas = [...canvases].find(c => parseInt(c.dataset.page) === note.page);
-        if (!canvas) return;
-        const rect = canvas.getBoundingClientRect();
-        const div = document.createElement('div');
-        div.className = 'note';
-        div.style.left = rect.left + note.x + 'px';
-        div.style.top = rect.top + note.y + 'px';
-        div.innerText = note.text;
-        div.onclick = (e) => {
-          e.stopPropagation();
-          const newText = prompt('Edit or delete this note. Leave blank to delete:', note.text);
-          if (newText === null) return;
-          if (newText === '') {
-            annotations = annotations.filter(n => n !== note);
-          } else {
-            note.text = newText;
-          }
-          drawNotes();
-        };
-        document.body.appendChild(div);
-      });
-    }
-
-    addNoteBtn.addEventListener('click', () => {
-      addNoteMode = !addNoteMode;
-      addNoteBtn.style.backgroundColor = addNoteMode ? '#2980b9' : '#3498db';
-    });
-
-    saveBtn.addEventListener('click', async () => {
-      const pdfDocLib = await PDFLib.PDFDocument.load(pdfBytesOriginal);
-      const pages = pdfDocLib.getPages();
-
-      annotations.forEach(note => {
-        const page = pages[note.page - 1];
-        const { height } = page.getSize();
-        page.drawText(note.text, {
-          x: note.x,
-          y: height - note.y,
-          size: 10,
-          color: PDFLib.rgb(0, 0, 0),
-          maxWidth: 150
-        });
-      });
-
-      const pdfBytes = await pdfDocLib.save();
-      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = 'annotated_script.pdf';
-      link.click();
-    });
-
-    nextPageBtn.addEventListener('click', () => {
-      if (currentPage + 2 <= totalPages) {
-        currentPage += 2;
-        renderPages(currentPage);
-      }
-    });
-
-    prevPageBtn.addEventListener('click', () => {
-      if (currentPage - 2 >= 1) {
-        currentPage -= 2;
-        renderPages(currentPage);
-      }
-    });
-
-    goPageBtn.addEventListener('click', () => {
+    window.addEventListener('resize', () => renderPages(currentPage));
+    goBtn.onclick = () => {
       const val = parseInt(pageInput.value);
       if (val >= 1 && val <= totalPages) {
-        currentPage = val % 2 === 0 ? val - 1 : val;
+        currentPage = val;
         renderPages(currentPage);
       }
-    });
-
-    addBookmarkBtn.addEventListener('click', () => {
-      if (!bookmarks.includes(currentPage)) {
-        bookmarks.push(currentPage);
-        const btn = document.createElement('button');
-        btn.innerText = 'Page ' + currentPage;
-        btn.onclick = () => {
-          currentPage = btn.innerText.split(' ')[1] * 1;
-          renderPages(currentPage);
-        };
-        bookmarkList.appendChild(btn);
-      }
-    });
-
-    bookmarkToggle.addEventListener('click', () => {
+    };
+    prevBtn.onclick = () => {
+      if (currentPage > 1) currentPage -= 2;
+      if (currentPage < 1) currentPage = 1;
+      renderPages(currentPage);
+    };
+    nextBtn.onclick = () => {
+      if (currentPage < totalPages) currentPage += 2;
+      renderPages(currentPage);
+    };
+    bookmarkBtn.onclick = () => {
+      const entry = `Page ${currentPage}`;
+      const item = document.createElement('div');
+      item.textContent = entry;
+      item.onclick = () => {
+        currentPage = parseInt(entry.split(' ')[1]);
+        renderPages(currentPage);
+      };
+      bookmarkList.appendChild(item);
+    };
+    bookmarkToggle.onclick = () => {
       bookmarkList.style.display = bookmarkList.style.display === 'none' ? 'block' : 'none';
-    });
+    };
   </script>
 </body>
 </html>
