@@ -23,30 +23,46 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      gap: 10px;
-      position: sticky;
-      top: 0;
       z-index: 10;
     }
 
-    #controls, #page-controls {
+    #controls {
       display: flex;
       gap: 10px;
       align-items: center;
+    }
+
+    #page-controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    button {
+      padding: 6px 12px;
+      font-size: 14px;
+      cursor: pointer;
+      background: #3498db;
+      color: white;
+      border: none;
+      border-radius: 4px;
+    }
+
+    button:disabled {
+      background: #95a5a6;
     }
 
     #viewer-container {
       flex: 1;
       display: flex;
-      gap: 10px;
-      align-items: center;
       justify-content: center;
+      align-items: flex-start;
       background: #f0f0f0;
-      overflow: auto;
+      overflow: hidden;
       position: relative;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
+      gap: 10px;
       padding: 10px;
-      max-height: 100%;
     }
 
     canvas {
@@ -64,86 +80,50 @@
       cursor: pointer;
     }
 
-    button {
-      padding: 6px 12px;
-      font-size: 14px;
-      cursor: pointer;
-      background: #3498db;
-      color: white;
-      border: none;
-      border-radius: 4px;
-    }
-
-    button:disabled {
-      background: #95a5a6;
-    }
-
     #bookmark-list {
+      position: absolute;
+      right: 10px;
+      top: 60px;
       background: white;
       border: 1px solid #ccc;
       padding: 10px;
       max-height: 200px;
       overflow-y: auto;
       z-index: 20;
-      position: absolute;
-      right: 10px;
-      top: 50px;
-      display: none;
     }
 
-    #bookmark-dropdown {
-      display: none;
+    #bookmark-toggle {
       position: absolute;
-      top: 40px;
       right: 10px;
-      background: #ecf0f1;
-      padding: 10px;
-      border-radius: 5px;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-      z-index: 20;
-    }
-
-    .bookmark-item {
+      top: 30px;
+      background: #2c3e50;
+      color: white;
+      border: none;
       padding: 5px 10px;
       cursor: pointer;
-    }
-
-    .bookmark-item:hover {
-      background-color: #bdc3c7;
-    }
-
-    #view-bookmarks {
-      background: #16a085;
-    }
-
-    #page-controls {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-    }
-
-    .page-input {
-      width: 50px;
-    }
-
-    @media (max-width: 600px) {
-      #viewer-container {
-        flex-direction: column;
-        justify-content: flex-start;
-      }
-      canvas {
-        max-width: 100%;
-      }
-    }
-
-    @media (min-width: 600px) {
-      #viewer-container {
-        justify-content: space-evenly;
-      }
+      z-index: 30;
     }
 
     #page-num {
-      white-space: nowrap;
+      font-size: 14px;
+      color: #2c3e50;
+    }
+
+    /* Ensure pages fit the screen in landscape and portrait */
+    @media (max-width: 600px) {
+      #viewer-container {
+        flex-direction: column;
+      }
+
+      #controls, #page-controls {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      canvas {
+        max-width: 100%;
+        width: auto;
+      }
     }
   </style>
 </head>
@@ -155,21 +135,16 @@
       <button id="add-bookmark-btn" disabled>Add Bookmark</button>
       <button id="save-btn" disabled>Save</button>
     </div>
-    <button id="view-bookmarks">View Bookmarks</button>
     <div id="page-controls">
-      <input type="number" id="page-input" min="1" class="page-input" />
-      <button id="go-page">Go</button>
       <button id="prev-page">Prev</button>
-      <button id="next-page">Next</button>
+      <input type="number" id="page-input" min="1" style="width: 50px;" />
+      <button id="go-page">Go</button>
       <span id="page-num">Page 1-2</span>
     </div>
   </div>
-  
   <div id="viewer-container"></div>
-
-  <div id="bookmark-dropdown">
-    <div id="bookmark-list"></div>
-  </div>
+  <div id="bookmark-list"></div>
+  <button id="bookmark-toggle">Toggle Bookmarks</button>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
   <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
@@ -185,8 +160,7 @@
     const goPageBtn = document.getElementById('go-page');
     const viewer = document.getElementById('viewer-container');
     const bookmarkList = document.getElementById('bookmark-list');
-    const bookmarkDropdown = document.getElementById('bookmark-dropdown');
-    const viewBookmarksBtn = document.getElementById('view-bookmarks');
+    const bookmarkToggle = document.getElementById('bookmark-toggle');
 
     let pdfDoc = null, currentPage = 1, totalPages = 0, pdfBytesOriginal = null;
     let annotations = [], bookmarks = [], addNoteMode = false;
@@ -325,8 +299,7 @@
     addBookmarkBtn.addEventListener('click', () => {
       if (!bookmarks.includes(currentPage)) {
         bookmarks.push(currentPage);
-        const btn = document.createElement('div');
-        btn.className = 'bookmark-item';
+        const btn = document.createElement('button');
         btn.innerText = 'Page ' + currentPage;
         btn.onclick = () => {
           currentPage = btn.innerText.split(' ')[1] * 1;
@@ -336,8 +309,8 @@
       }
     });
 
-    viewBookmarksBtn.addEventListener('click', () => {
-      bookmarkDropdown.style.display = bookmarkDropdown.style.display === 'none' ? 'block' : 'none';
+    bookmarkToggle.addEventListener('click', () => {
+      bookmarkList.style.display = bookmarkList.style.display === 'none' ? 'block' : 'none';
     });
   </script>
 </body>
